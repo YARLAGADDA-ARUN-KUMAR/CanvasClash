@@ -1,6 +1,7 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import cors from 'cors';
+import http from 'http';
 
 const app = express();
 
@@ -11,7 +12,6 @@ app.use(
   }),
 );
 
-const PORT = process.env.PORT || 3000;
 const TARGET_SERVER = 'http://server:3001';
 
 app.use(
@@ -29,16 +29,13 @@ app.use(
   createProxyMiddleware({
     target: TARGET_SERVER,
     changeOrigin: true,
-    pathRewrite: {
-      '^/api': '',
-    },
+    pathRewrite: { '^/api': '' },
   }),
 );
 
-app.get('/gateway-health', (req, res) => {
-  res.send('Gateway is running and routing traffic.');
-});
+const PORT = process.env.PORT || 3000;
+const server = http.createServer(app);
 
-app.listen(PORT, () => {
-  console.log('Gateway is running on port: 3000');
+server.listen(PORT, () => {
+  console.log(`Gateway running on ${PORT}`);
 });
