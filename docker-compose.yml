@@ -1,11 +1,11 @@
-version: "3.9"
+version: '3.9'
 
 services:
   server:
     build: ./server
     container_name: dev_server
     ports:
-      - "3001:3001"
+      - '3000:3000'
     env_file:
       - ./env/server.env
     volumes:
@@ -14,30 +14,15 @@ services:
     command: npm run dev
     restart: unless-stopped
 
-  gateway:
-    build: ./gateway
-    container_name: dev_gateway
-    ports:
-      - "3000:3000"
-    env_file:
-      - ./env/gateway.env
-    volumes:
-      - ./gateway:/app
-      - /app/node_modules
-    command: npm run dev
-    depends_on:
-      - server
-    restart: unless-stopped
-
   client:
     build: ./client
     container_name: dev_client
     ports:
-      - "5173:5173"
+      - '5173:5173'
     volumes:
       - ./client:/app
       - /app/node_modules
     command: npm run dev -- --host
     depends_on:
-      - gateway
+      - server
     restart: unless-stopped
