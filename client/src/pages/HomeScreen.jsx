@@ -10,8 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import socket from '@/utils/socket';
+import { useNavigate } from 'react-router-dom';
 
 export default function HomeScreen() {
+  const navigate = useNavigate();
+  const [playerName, setPlayerName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('4');
   const [timeLimit, setTimeLimit] = useState('60');
   const [rounds, setRounds] = useState('3');
@@ -19,16 +23,28 @@ export default function HomeScreen() {
   const [roomId, setRoomId] = useState('');
 
   const handleCreateRoom = () => {
+    if (playerName === '') return;
     const settings = {
       maxPlayers,
       timeLimit,
       rounds,
     };
-    console.log('Create Room with:', settings);
+
+    socket.emit('create-room', { playerName, settings });
+    socket.once('room-created', ({ roomId }) => {
+      navigate(`/waiting-room/${roomId}`);
+    });
   };
 
   const handleJoinRoom = () => {
-    console.log('Joining Room:', roomId);
+    if (!playerName || !roomId) return;
+    socket.emit('join-room', { roomId, playerName });
+    socket.once('join_success', ({ roomId: id }) => {
+      navigate(`/waiting-room/${id}`);
+    });
+    socket.once('join_error', ({ message }) => {
+      alert(message);
+    });
   };
 
   return (
@@ -40,6 +56,13 @@ export default function HomeScreen() {
       <Card className="w-full max-w-md border-4 border-black shadow-[8px_8px_0px_black] bg-white">
         <CardContent className="p-6 space-y-6">
           <div className="space-y-2">
+            <Label>Player name</Label>
+            <Input
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="Enter your name"
+              className="border-4 border-black"
+            />
             <Label>Max Players</Label>
             <Select value={maxPlayers} onValueChange={setMaxPlayers}>
               <SelectTrigger className="border-4 border-black">

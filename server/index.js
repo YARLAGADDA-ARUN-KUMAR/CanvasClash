@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
+import registerSocketEvents from './socket.js';
 
 const app = express();
 app.use(express.json());
@@ -25,18 +26,7 @@ const io = new Server(server, {
   transports: ['polling', 'websocket'],
 });
 
-io.on('connection', (socket) => {
-  console.log('User Connected:', socket.id);
-
-  socket.on('message', (data) => {
-    console.log('Message received:', data);
-    io.emit('message', data);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-  });
-});
+registerSocketEvents(io);
 
 app.get('/health', (req, res) => res.send('Server is up'));
 
