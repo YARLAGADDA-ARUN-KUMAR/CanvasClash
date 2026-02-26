@@ -1,5 +1,7 @@
 import * as roomManager from './roommanager.js';
 
+const timers = {};
+
 function registerSocketEvents(io) {
   io.on('connect', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -51,8 +53,69 @@ function registerSocketEvents(io) {
       const result = roomManager.startGame(socket.id, roomId);
       if (!result.success) return;
 
+      roomManager.initGame(roomId);
       io.to(roomId).emit('game_start', { roomId });
+
+      startTurn(roomId, io);
       console.log(`Game started in room ${roomId}`);
+    });
+
+    socket.on('choose_word', ({ roomId, word }) => {
+      roomManager.setCurrentWord(roomId, word);
+      const room = roomManager.getRoom(roomId);
+
+      io.to(roomId).emit('word_length', {
+        length: word.length,
+      });
+
+      socket.emit('your_word', { word });
+      startTimer(roomId, io);
+    });
+
+    socket.on('guess', ({ roomId, guess, timeLeft }) => {
+      const room = roomManager.getRoom(roomId);
+      if (!room) return;
+
+      const drawer = room.players[room.currentDrawerIndex];
+      if (socket.id === drawer.id) return;
+
+      const result = roomManager.checkGuess(roomId, socket.id, guess, timeLeft);
+      const guesser = room.players.find((p) => p.id === socket.id);
+
+      if (result.correct) {
+        drawer.score += 50;
+
+        if (timers[roomId]) {
+          clearInterval(timers[roomId]);
+          delete timers[roomId];
+        }
+
+        io.to(roomId).emit('correct_guess', {
+          playerName: guesser.name,
+          players: room.players,
+        });
+
+        room.turnEnding = true;
+
+        setTimeout(() => endTurn(roomId, io), 3000);
+      } else {
+        io.to(roomId).emit('chat_message', {
+          playerName: guesser.name,
+          message: guess,
+        });
+      }
+    });
+
+    socket.on('draw', (data) => {
+      socket.to(data.roomId).emit('draw', data);
+    });
+
+    socket.on('clear_canvas', ({ roomId }) => {
+      socket.to(roomId).emit('clear_canvas');
+    });
+
+    socket.on('undo_stroke', ({ roomId, strokes }) => {
+      socket.to(roomId).emit('undo_stroke', { strokes });
     });
 
     socket.on('disconnect', () => {
@@ -62,6 +125,69 @@ function registerSocketEvents(io) {
       if (roomId) handleLeave(socket, roomId, io);
     });
   });
+}
+
+function startTurn(roomId, io) {
+  const room = roomManager.getRoom(roomId);
+  if (!room || room.status === 'ended') return;
+
+  const drawer = room.players[room.currentDrawerIndex];
+  const wordChoices = roomManager.getRandomWords();
+
+  io.to(roomId).emit('turn_start', {
+    drawerId: drawer.id,
+    drawerName: drawer.name,
+    round: room.currentRound,
+    totalRounds: room.settings.rounds,
+  });
+
+  io.to(drawer.id).emit('choose_word', { words: wordChoices });
+  console.log(`Turn started in room ${roomId}, drawer: ${drawer.name}`);
+}
+
+function startTimer(roomId, io) {
+  const room = roomManager.getRoom(roomId);
+  if (!room) return;
+
+  let timeLeft = room.settings.timeLimit;
+
+  if (timers[roomId]) clearInterval(timers[roomId]);
+
+  timers[roomId] = setInterval(() => {
+    timeLeft -= 1;
+
+    io.to(roomId).emit('tick', { timeLeft });
+
+    if (timeLeft <= 0) {
+      clearInterval(timers[roomId]);
+      delete timers[roomId];
+      if (!room.turnEnding) {
+        endTurn(roomId, io);
+      }
+    }
+  }, 1000);
+}
+
+function endTurn(roomId, io) {
+  const room = roomManager.getRoom(roomId);
+  if (!room) return;
+
+  io.to(roomId).emit('turn_end', {
+    word: room.currentWord,
+    players: room.players,
+  });
+
+  setTimeout(() => {
+    const result = roomManager.nextTurn(roomId);
+
+    if (result.gameOver) {
+      io.to(roomId).emit('game_over', {
+        players: result.players,
+      });
+    } else {
+      startTurn(roomId, io);
+    }
+  }, 3000);
 }
 
 function handleLeave(socket, roomId, io) {

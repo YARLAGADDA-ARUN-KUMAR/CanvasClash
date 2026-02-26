@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { words } from './words.js';
 
 const rooms = {};
 
@@ -96,4 +97,51 @@ export const findRoomBySocket = (socketId) => {
     if (found) return roomId;
   }
   return null;
+};
+
+export const initGame = (roomId) => {
+  const room = rooms[roomId];
+  room.currentRound = 1;
+  room.currentDrawerIndex = 0;
+  room.currentWord = null;
+  room.turnScores = {};
+  return room;
+};
+
+export const getRandomWords = () => {
+  const shuffled = [...words].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+};
+
+export const setCurrentWord = (roomId, word) => {
+  const room = rooms[roomId];
+  room.currentWord = word;
+  room.wordLength = word.length;
+};
+
+export const checkGuess = (roomId, socketId, guess, timeLeft) => {
+  const room = rooms[roomId];
+  if (!room || !room.currentWord) return { correct: false };
+  const correct = guess.trim().toLowerCase() === room.currentWord.toLowerCase();
+  if (correct) {
+    const player = room.players.find((p) => p.id === socketId);
+    if (player) player.score += Math.max(50, timeLeft * 5);
+  }
+  return { correct, word: room.currentWord };
+};
+
+export const nextTurn = (roomId) => {
+  const room = rooms[roomId];
+  room.currentDrawerIndex += 1;
+  if (room.currentDrawerIndex >= room.players.length) {
+    room.currentDrawerIndex = 0;
+    room.currentRound += 1;
+  }
+  room.currentWord = null;
+  if (room.currentRound > room.settings.rounds) {
+    room.status = 'ended';
+    return { gameOver: true, players: room.players };
+  }
+  const drawer = room.players[room.currentDrawerIndex];
+  return { gameOver: false, drawer, round: room.currentRound };
 };

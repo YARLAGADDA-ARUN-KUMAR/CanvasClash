@@ -22,7 +22,7 @@ export default function WaitingRoom() {
     });
 
     socket.on('game_start', () => {
-      navigate('/game');
+      navigate(`/game/${roomId}`);
     });
 
     return () => {
