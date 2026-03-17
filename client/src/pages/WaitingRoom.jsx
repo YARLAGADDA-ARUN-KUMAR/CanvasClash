@@ -26,7 +26,6 @@ export default function WaitingRoom() {
     });
 
     return () => {
-      socket.off('room-created');
       socket.off('room_update');
       socket.off('game_start');
     };
@@ -71,7 +70,7 @@ export default function WaitingRoom() {
                   className="border-2 border-black p-2 font-semibold bg-gray-100"
                 >
                   {player.name}
-                  {player.id === room.hostId && ' 👑'}
+                  {player.isHost && ' 👑'}
                 </li>
               ))}
             </ul>

@@ -34,6 +34,8 @@ export default function Game() {
   const [showTurnEnd, setShowTurnEnd] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [finalPlayers, setFinalPlayers] = useState([]);
+  const [wordChoiceTimeLeft, setWordChoiceTimeLeft] = useState(10);
+  const hasEmittedReady = useRef(false);
 
   const getPos = (e) => {
     const canvas = canvasRef.current;
@@ -162,20 +164,22 @@ export default function Game() {
         setTotalRounds(tr);
         setCurrentWord('');
         setTurnEndWord('');
-        setShowTurnEnd(false);
         setWordChoices([]);
         setShowWordChoices(false);
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        strokeHistory.current = [];
-        redoStack.current = [];
+        setShowTurnEnd(false);
+        setWordChoiceTimeLeft(10);
+        setTimeLeft(0);
+        hasEmittedReady.current = false;
         setMessages((prev) => [
           ...prev,
-          { type: 'system', text: `${drawerName} is now drawing!` },
+          { system: true, text: `${drawerName} is drawing!` },
         ]);
       },
     );
+
+    socket.on('word_choice_tick', ({ timeLeft }) => {
+      setWordChoiceTimeLeft(timeLeft);
+    });
 
     socket.on('choose_word', ({ words }) => {
       setWordChoices(words);
@@ -184,6 +188,7 @@ export default function Game() {
 
     socket.on('your_word', ({ word }) => {
       setCurrentWord(word);
+      setShowWordChoices(false);
     });
 
     socket.on('word_length', ({ length }) => {
@@ -240,6 +245,11 @@ export default function Game() {
       setPlayers(updatedPlayers);
     });
 
+    if (!hasEmittedReady.current) {
+      socket.emit('player_ready', { roomId });
+      hasEmittedReady.current = true;
+    }
+
     return () => {
       socket.off('turn_start');
       socket.off('choose_word');
@@ -254,8 +264,9 @@ export default function Game() {
       socket.off('clear_canvas');
       socket.off('undo_stroke');
       socket.off('room_update');
+      socket.off('word_choice_tick');
     };
-  }, []);
+  }, [roomId]);
 
   const colors = [
     '#000000',
@@ -420,11 +431,18 @@ export default function Game() {
           )}
         </Card>
       </div>
+
       {showWordChoices && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white border-4 border-black shadow-[8px_8px_0px_black] p-8 flex flex-col items-center gap-6">
-            <h2 className="text-2xl font-black">Choose a word to draw!</h2>
-            <div className="flex gap-4">
+          <div className="bg-white border-4 border-black shadow-[8px_8px_0px_black] p-8 text-center">
+            <h2 className="text-2xl font-black mb-2">Choose a Word!</h2>
+            <p className="text-xl mb-4">
+              Time:{' '}
+              <span className="font-black text-red-500">
+                {wordChoiceTimeLeft}s
+              </span>
+            </p>
+            <div className="flex gap-4 justify-center">
               {wordChoices.map((word) => (
                 <button
                   key={word}
@@ -441,6 +459,7 @@ export default function Game() {
           </div>
         </div>
       )}
+
       {showTurnEnd && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white border-4 border-black shadow-[8px_8px_0px_black] p-8 text-center">

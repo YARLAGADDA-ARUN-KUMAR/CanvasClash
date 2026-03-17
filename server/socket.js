@@ -56,11 +56,20 @@ function registerSocketEvents(io) {
       roomManager.initGame(roomId);
       io.to(roomId).emit('game_start', { roomId });
 
-      startTurn(roomId, io);
       console.log(`Game started in room ${roomId}`);
     });
 
+    socket.on('player_ready', ({ roomId }) => {
+      const result = roomManager.markPlayerReady(roomId, socket.id);
+
+      if (result.allReady) {
+        startTurn(roomId, io);
+      }
+    });
+
     socket.on('choose_word', ({ roomId, word }) => {
+      roomManager.clearWordChoiceTimer(roomId);
+
       roomManager.setCurrentWord(roomId, word);
       const room = roomManager.getRoom(roomId);
 
@@ -131,6 +140,8 @@ function startTurn(roomId, io) {
   const room = roomManager.getRoom(roomId);
   if (!room || room.status === 'ended') return;
 
+  room.turnEnding = false;
+
   const drawer = room.players[room.currentDrawerIndex];
   const wordChoices = roomManager.getRandomWords();
 
@@ -142,6 +153,11 @@ function startTurn(roomId, io) {
   });
 
   io.to(drawer.id).emit('choose_word', { words: wordChoices });
+
+  roomManager.startWordChoiceTimer(roomId, io, drawer.id, 10, () => {
+    startTimer(roomId, io);
+  });
+
   console.log(`Turn started in room ${roomId}, drawer: ${drawer.name}`);
 }
 
